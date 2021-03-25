@@ -1,5 +1,5 @@
 
-
+"""
 def parse_toc_epub(epub_book):
 
 	'''Subroutine to parse the toc of an epub book'''
@@ -13,11 +13,34 @@ def parse_toc_epub(epub_book):
 			for l1_item in toc_el:
 				if type(l1_item) in [tuple, list, set]:
 					for l2_item in l1_item:
+						print(l2_item)
 						toc_titles_list.append(l2_item.title)
 				else:
 					toc_titles_list.append(l1_item.title)
 		else:
 			toc_titles_list.append(toc_el.title)
+
+	return toc_titles_list
+"""
+
+
+# Old working version above, test version below
+def parse_toc_epub(epub_book):
+
+	'''Subroutine to parse the toc of an epub book'''
+
+	def flatten_toc(toc_list):
+
+		'''Subroutine to flatten nested tocs'''
+
+		for toc_el in toc_list:
+			if isinstance(toc_el, Iterable) and not isinstance(toc_el, (str, bytes)):
+				yield from flatten_toc(toc_el)
+			else:
+				yield toc_el
+
+	# List to hold the table of content titles
+	toc_titles_list = [ toc_el.title for toc_el in list(flatten_toc(epub_book.toc))]
 
 	return toc_titles_list
 
@@ -146,18 +169,24 @@ if __name__ == "__main__":
 	import logging
 	import string
 	import re
+	import itertools
 	from ebooklib import epub
+	# Explictly import toc classes for type checking
+	from ebooklib.epub import Link, Section
 	from pathlib import Path
 	from collections import OrderedDict
+	from collections.abc import Iterable
 	from fuzzywuzzy import process, fuzz
 	from num2words import num2words
 
-	filename = sys.argv[1] 
+	filename = Path(sys.argv[1])
 
-	logging.basicConfig(filename=f"{filename}.log", filemode='w', format='%(message)s', level=logging.DEBUG)
+	logging.basicConfig(filename=filename.with_suffix('.log'), filemode='w', format='%(message)s', level=logging.DEBUG)
 
-	book = epub.read_epub(Path(Path.cwd() / f"{filename}.epub"))
-	book_srt = srt.parse(Path(Path.cwd() / f"{filename}.srt").read_text())
+	work_dir = Path.cwd() / 'work_dir'
 
-	map_srt_to_epub(book, book_srt, chapters_file=Path(Path.cwd()/f'{filename}.chapters.txt'))
+	book = epub.read_epub(filename.with_suffix('.epub'))
+	book_srt = srt.parse(filename.with_suffix('.srt').read_text())
+
+	map_srt_to_epub(book, book_srt, chapters_file=filename.with_suffix('.chapters.txt'))
 
