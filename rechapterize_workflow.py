@@ -35,4 +35,4 @@ subprocess.call(['python', f"{vosk_srt_path / 'test_srt.py'}", f"{filename.with_
 
 print(f"Step 4: Identifying chapter timestamps in the audiobook .....")
 
-#subprocess.call(['python', 'map_srt_to_epub.py', f"{filename}"])
+subprocess.call(['python', 'map_srt_to_epub.py', f"{filename}"])
