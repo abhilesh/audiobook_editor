@@ -30,8 +30,9 @@ subprocess.run(['ffmpeg', '-i',
 
 print(f"Step 3: Generating speech-to-text maps for wav file .....")
 
-srt_outfile = open(filename.with_suffix('.srt'), 'w')
-subprocess.call(['python', f"{vosk_srt_path / 'test_srt.py'}", f"{filename.with_suffix('.wav')}"], stdout=srt_outfile)
+if not filename.with_suffix('.srt').is_file():
+    srt_outfile = open(filename.with_suffix('.srt'), 'w')
+    subprocess.call(['python', f"{vosk_srt_path / 'test_srt.py'}", f"{filename.with_suffix('.wav')}"], stdout=srt_outfile)
 
 print(f"Step 4: Identifying chapter timestamps in the audiobook .....")
 
