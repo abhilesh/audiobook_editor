@@ -1,30 +1,25 @@
-"""
-def parse_toc_epub(epub_book):
+import sys
+import ebooklib
+import srt
+import json
+import datetime
+import logging
+import string
+import re
+import itertools
+import argparse
+from ebooklib import epub
 
-        '''Subroutine to parse the toc of an epub book'''
-
-        # List to hold the table of contents titles
-        toc_titles_list = []
-
-        # Gather the chapter titles from the table of contents
-        for toc_el in epub_book.toc:
-                if type(toc_el) in [tuple, list, set]:
-                        for l1_item in toc_el:
-                                if type(l1_item) in [tuple, list, set]:
-                                        for l2_item in l1_item:
-                                                print(l2_item)
-                                                toc_titles_list.append(l2_item.title)
-                                else:
-                                        toc_titles_list.append(l1_item.title)
-                else:
-                        toc_titles_list.append(toc_el.title)
-
-        return toc_titles_list
-"""
+# Explictly import toc classes for type checking
+from ebooklib.epub import Link, Section
+from pathlib import Path
+from collections import OrderedDict
+from collections.abc import Iterable
+from fuzzywuzzy import process, fuzz
+from num2words import num2words
 
 
 def parse_arguments():
-
     """Adding flags for more modular conversion"""
 
     parser = argparse.ArgumentParser()
@@ -51,13 +46,10 @@ def parse_arguments():
     return args
 
 
-# Old working version above, test version below
 def parse_toc_epub(epub_book):
-
     """Subroutine to parse the toc of an epub book"""
 
     def flatten_toc(toc_list):
-
         """Subroutine to flatten nested tocs"""
 
         for toc_el in toc_list:
@@ -73,7 +65,6 @@ def parse_toc_epub(epub_book):
 
 
 def process_srt(book_srt, chapter_heads_only=False):
-
     """Subroutine to process the book srt into processable chunks"""
 
     if not isinstance(book_srt, list):
@@ -113,7 +104,6 @@ def process_srt(book_srt, chapter_heads_only=False):
 
 
 def process_toc(book_toc):
-
     """Subroutine to process the book's toc
     ---------------------------------------
     Convert digits to words"""
@@ -151,7 +141,7 @@ def map_srt_to_epub(
         toc_titles_list = ["chapter"]
 
     elif not chapter_heads_only:
-        toc_titles_list = process_toc(parse_toc_epub(book))
+        toc_titles_list = process_toc(parse_toc_epub(epub_book))
 
     # Initiate containers to hold matches (Why am I using best_match_dict?)
     best_match_dict = {}
@@ -186,35 +176,37 @@ def map_srt_to_epub(
 
         elif not chapter_heads_only:
 
-            toc_title_key = toc_title.split()[0].lower()
+            if toc_title.strip():  # Check if the toc_title is not empty
 
-            best_match = process.extractOne(
-                toc_title, srt_contents_list, scorer=fuzz.token_set_ratio
-            )
-            best_match_index = srt_comp_indices[best_match[0]]
+                toc_title_key = toc_title.split()[0].lower()
 
-            best_match_dict.update({toc_title: best_match_index})
-
-            if toc_title_key in book_srt_list[best_match_index].content:
-
-                chapter_timestamps.append(
-                    (book_srt_list[best_match_index].start, toc_title)
+                best_match = process.extractOne(
+                    toc_title, srt_contents_list, scorer=fuzz.token_set_ratio
                 )
+                best_match_index = srt_comp_indices[best_match[0]]
 
-                logging.info(toc_title)
-                logging.info(book_srt_list[best_match_index])
-                logging.info("")
+                best_match_dict.update({toc_title: best_match_index})
 
-            elif toc_title_key in book_srt_list[best_match_index - 1].content:
+                if toc_title_key in book_srt_list[best_match_index].content:
 
-                chapter_timestamps.append(
-                    (book_srt_list[best_match_index - 1].start, toc_title)
-                )
+                    chapter_timestamps.append(
+                        (book_srt_list[best_match_index].start, toc_title)
+                    )
 
-                logging.info(toc_title)
-                logging.info(book_srt_list[best_match_index - 1])
-                logging.info(book_srt_list[best_match_index])
-                logging.info("")
+                    logging.info(toc_title)
+                    logging.info(book_srt_list[best_match_index])
+                    logging.info("")
+
+                elif toc_title_key in book_srt_list[best_match_index - 1].content:
+
+                    chapter_timestamps.append(
+                        (book_srt_list[best_match_index - 1].start, toc_title)
+                    )
+
+                    logging.info(toc_title)
+                    logging.info(book_srt_list[best_match_index - 1])
+                    logging.info(book_srt_list[best_match_index])
+                    logging.info("")
 
     with open(output_file, "w") as outfile:
 
@@ -238,58 +230,47 @@ def map_srt_to_epub(
     return
 
 
-if __name__ == "__main__":
+def main(input_file, ch_head_only=False):
 
-    import sys
-    import ebooklib
-    import srt
-    import json
-    import datetime
-    import logging
-    import string
-    import re
-    import itertools
-    import argparse
-    from ebooklib import epub
-
-    # Explictly import toc classes for type checking
-    from ebooklib.epub import Link, Section
-    from pathlib import Path
-    from collections import OrderedDict
-    from collections.abc import Iterable
-    from fuzzywuzzy import process, fuzz
-    from num2words import num2words
-
-    # filename = Path(sys.argv[1])
-    input_args = parse_arguments()
-
-    filename = Path(input_args.book_srt)
-    chapter_heads_only = input_args.chapter_heads_only
+    srt_file = Path(input_file.with_suffix(".srt"))
+    epub_file = Path(input_file.with_suffix(".epub"))
 
     logging.basicConfig(
-        filename=filename.with_suffix(".log"),
+        filename=srt_file.with_suffix(".log"),
         filemode="w",
         format="%(message)s",
         level=logging.DEBUG,
     )
 
-    work_dir = Path.cwd() / "work_dir"
+    book_srt = srt.parse(srt_file.read_text())
 
-    book_srt = srt.parse(filename.with_suffix(".srt").read_text())
-
-    if not chapter_heads_only:
-        book = epub.read_epub(filename.with_suffix(".epub"))
-    elif chapter_heads_only:
+    if not ch_head_only:
+        book = epub.read_epub(epub_file)
+    elif ch_head_only:
         book = None
 
-    if input_args.output_file == None:
-        output_file = filename.with_suffix(".chapters.txt")
-    else:
-        output_file = None
+    chapter_fout = srt_file.with_suffix(".chapters.txt")
 
     map_srt_to_epub(
         book_srt,
         epub_book=book,
-        chapter_heads_only=input_args.chapter_heads_only,
-        output_file=output_file,
+        output_file=chapter_fout,
+        chapter_heads_only=ch_head_only,
     )
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("input_file", help="The audiobook filename")
+    parser.add_argument(
+        "-ch",
+        "--chapter_heads_only",
+        action="store_true",
+        help="Extract only Chapter headers such as Chapter 1, Chapter 2 etc...",
+    )
+
+    args = parser.parse_args()
+
+    main(args.input_file, ch_head_only=args.chapter_heads_only)
